@@ -1,5 +1,9 @@
 const Joi = require("joi");
-const { LISTING_CATEGORIES } = require("../models/listing");
+const {
+  LISTING_CATEGORIES,
+  PROPERTY_TYPES,
+  LISTING_STATUSES,
+} = require("../models/listing");
 
 const countryPattern = /^(?=.*[A-Za-z])[A-Za-z\s.'-]+$/;
 
@@ -16,9 +20,39 @@ const listingValidationSchema = Joi.object({
         "Country must contain letters and may include spaces, apostrophes, period, or hyphen.",
     }),
   price: Joi.number().min(0).required(),
+  cleaningFee: Joi.number().min(0).default(0),
   category: Joi.string()
     .valid(...LISTING_CATEGORIES)
     .default("Trending"),
+  propertyType: Joi.string()
+    .valid(...PROPERTY_TYPES)
+    .default("Entire home"),
+  maxGuests: Joi.number().integer().min(1).max(30).default(2),
+  bedrooms: Joi.number().integer().min(0).max(30).default(1),
+  bathrooms: Joi.number().min(0).max(30).default(1),
+  status: Joi.string()
+    .valid(...LISTING_STATUSES)
+    .default("published"),
+  amenities: Joi.alternatives()
+    .try(Joi.array().items(Joi.string().trim()), Joi.string().allow(""))
+    .default([]),
+  removedImageFilenames: Joi.alternatives()
+    .try(Joi.array().items(Joi.string().trim()), Joi.string().allow(""))
+    .default([]),
+});
+
+const listingStatusValidationSchema = Joi.object({
+  status: Joi.string()
+    .valid(...LISTING_STATUSES)
+    .required(),
+});
+
+const availabilityBlockValidationSchema = Joi.object({
+  startDate: Joi.date().iso().required(),
+  endDate: Joi.date().iso().greater(Joi.ref("startDate")).required().messages({
+    "date.greater": "End date must be after start date.",
+  }),
+  reason: Joi.string().trim().max(120).allow("").default("Host blocked"),
 });
 
 const reviewValidationSchema = Joi.object({
@@ -55,6 +89,8 @@ const hostOnboardingValidationSchema = Joi.object({
 
 module.exports = {
   listingValidationSchema,
+  listingStatusValidationSchema,
+  availabilityBlockValidationSchema,
   reviewValidationSchema,
   signupValidationSchema,
   loginValidationSchema,

@@ -36,6 +36,12 @@ const imageSubSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const blockedDateSubSchema = new mongoose.Schema({
+  startDate: { type: Date, required: true },
+  endDate: { type: Date, required: true },
+  reason: { type: String, default: "Unavailable", trim: true },
+});
+
 const listingSchema = new mongoose.Schema(
   {
     title: {
@@ -137,6 +143,11 @@ const listingSchema = new mongoose.Schema(
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      index: true,
+    },
+    blockedDates: {
+      type: [blockedDateSubSchema],
+      default: [],
     },
     geometry: {
       type: {

@@ -11,13 +11,18 @@ const {
 const { validateListing } = require("../middleware/validate");
 const { upload } = require("../config/cloudinary");
 
+const listingUpload = upload.fields([
+  { name: "images", maxCount: 8 },
+  { name: "image", maxCount: 1 },
+]);
+
 router
   .route("/")
   .get(wrapAsync(listingController.index))
   .post(
     requireAuth,
     requireHost,
-    upload.single("image"),
+    listingUpload,
     validateListing,
     wrapAsync(listingController.createListing)
   );
@@ -29,7 +34,7 @@ router
     requireAuth,
     requireHost,
     isOwner,
-    upload.single("image"),
+    listingUpload,
     validateListing,
     wrapAsync(listingController.updateListing)
   )

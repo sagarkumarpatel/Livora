@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const Listing = require("../models/listing");
 const ExpressError = require("../utils/expressError");
 const {
-  uploadToCloudinary,
+  uploadManyToCloudinary,
   deleteFromCloudinary,
 } = require("../config/cloudinary");
 const { geocodeLocation } = require("../utils/geocode");
@@ -11,10 +11,18 @@ function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function getUploadedFiles(req) {
+  if (Array.isArray(req.files)) return req.files;
+  const multi = req.files?.images || [];
+  const single = req.files?.image || [];
+  const fileSingle = req.file ? [req.file] : [];
+  return [...multi, ...single, ...fileSingle];
+}
+
 /**
- * Formats a listing document for public consumption without exposing private owner data.
+ * Formats a listing document for public/host responses without exposing private user secrets.
  */
-function formatPublicListing(doc, { includeReviews = false } = {}) {
+function formatPublicListing(doc, { includeReviews = false, includeBlockedDates = false } = {}) {
   const plain = doc.toObject ? doc.toObject() : { ...doc };
   const images =
     Array.isArray(plain.images) && plain.images.length > 0
@@ -77,8 +85,16 @@ function formatPublicListing(doc, { includeReviews = false } = {}) {
     formatted.reviews = populatedReviews;
   }
 
+  if (includeBlockedDates) {
+    formatted.blockedDates = Array.isArray(plain.blockedDates)
+      ? plain.blockedDates
+      : [];
+  }
+
   return formatted;
 }
+
+module.exports.formatPublicListing = formatPublicListing;
 
 module.exports.index = async (req, res) => {
   const { search, category } = req.query;
@@ -140,23 +156,29 @@ module.exports.showListing = async (req, res) => {
   }
 
   res.json({
-    listing: formatPublicListing(listing, { includeReviews: true }),
+    listing: formatPublicListing(listing, {
+      includeReviews: true,
+      includeBlockedDates: Boolean(isOwnerViewer),
+    }),
   });
 };
 
 module.exports.createListing = async (req, res) => {
-  if (!req.file) {
-    throw new ExpressError(400, "Listing image is required.");
+  const files = getUploadedFiles(req);
+  if (files.length === 0) {
+    throw new ExpressError(400, "At least one listing image is required.");
   }
 
-  const image = await uploadToCloudinary(req.file.buffer);
+  const uploadedImages = await uploadManyToCloudinary(files);
   const geometry = await geocodeLocation(req.body.location, req.body.country);
 
+  const { removedImageFilenames, ...listingFields } = req.body;
+
   const newListing = new Listing({
-    ...req.body,
+    ...listingFields,
     owner: req.user._id,
-    image,
-    images: [image],
+    image: uploadedImages[0],
+    images: uploadedImages,
     geometry,
   });
 
@@ -171,11 +193,36 @@ module.exports.createListing = async (req, res) => {
 
 module.exports.updateListing = async (req, res) => {
   const listing = req.listing;
-  const locationChanged =
-    req.body.location !== listing.location ||
-    req.body.country !== listing.country;
+  const { removedImageFilenames = [], ...listingFields } = req.body;
 
-  Object.assign(listing, req.body);
+  const existingImages =
+    Array.isArray(listing.images) && listing.images.length > 0
+      ? listing.images.map((img) => ({ url: img.url, filename: img.filename || "" }))
+      : listing.image?.url
+      ? [{ url: listing.image.url, filename: listing.image.filename || "" }]
+      : [];
+
+  const removeSet = new Set(removedImageFilenames);
+  const remainingImages = existingImages.filter(
+    (img) => !removeSet.has(img.filename) && !removeSet.has(img.url)
+  );
+  const files = getUploadedFiles(req);
+
+  if (remainingImages.length + files.length === 0) {
+    throw new ExpressError(
+      400,
+      "Listing must keep at least one image."
+    );
+  }
+
+  const newlyUploaded =
+    files.length > 0 ? await uploadManyToCloudinary(files) : [];
+
+  const locationChanged =
+    listingFields.location !== listing.location ||
+    listingFields.country !== listing.country;
+
+  Object.assign(listing, listingFields);
 
   if (locationChanged) {
     listing.geometry = await geocodeLocation(
@@ -184,15 +231,20 @@ module.exports.updateListing = async (req, res) => {
     );
   }
 
-  if (req.file) {
-    const oldFilename = listing.image?.filename;
-    const uploaded = await uploadToCloudinary(req.file.buffer);
-    listing.image = uploaded;
-    listing.images = [uploaded];
-    await deleteFromCloudinary(oldFilename);
-  }
+  const finalImages = [...remainingImages, ...newlyUploaded];
+  listing.images = finalImages;
+  listing.image = finalImages[0];
 
   await listing.save();
+
+  // Clean up removed Cloudinary assets after successful DB save
+  const removedExisting = existingImages.filter(
+    (img) => removeSet.has(img.filename) || removeSet.has(img.url)
+  );
+  await Promise.all(
+    removedExisting.map((img) => deleteFromCloudinary(img.filename))
+  );
+
   await listing.populate("owner", "username createdAt");
 
   res.json({
@@ -204,8 +256,15 @@ module.exports.updateListing = async (req, res) => {
 module.exports.destroyListing = async (req, res) => {
   const { id } = req.params;
   const deleted = await Listing.findByIdAndDelete(id);
-  if (deleted?.image?.filename) {
-    await deleteFromCloudinary(deleted.image.filename);
+  if (deleted) {
+    const filenames = new Set();
+    if (deleted.image?.filename) filenames.add(deleted.image.filename);
+    if (Array.isArray(deleted.images)) {
+      deleted.images.forEach((img) => {
+        if (img?.filename) filenames.add(img.filename);
+      });
+    }
+    await Promise.all([...filenames].map((f) => deleteFromCloudinary(f)));
   }
 
   res.json({ message: "Listing Deleted!" });

@@ -1,6 +1,9 @@
+const mongoose = require("mongoose");
 const HostProfile = require("../models/hostProfile");
+const Listing = require("../models/listing");
 const User = require("../models/user");
 const ExpressError = require("../utils/expressError");
+const { formatPublicListing } = require("./listings");
 
 function formatHostUser(user) {
   return {
@@ -70,4 +73,127 @@ module.exports.updateMyHostProfile = async (req, res) => {
     message: "Host profile updated.",
     hostProfile,
   });
+};
+
+module.exports.getHostListings = async (req, res) => {
+  const docs = await Listing.find({ owner: req.user._id })
+    .populate("owner", "username createdAt")
+    .populate("reviews", "rating")
+    .sort({ createdAt: -1 });
+
+  const listings = docs.map((doc) =>
+    formatPublicListing(doc, { includeBlockedDates: true })
+  );
+  res.json({ listings });
+};
+
+module.exports.updateListingStatus = async (req, res) => {
+  const listing = req.listing;
+  listing.status = req.body.status;
+  await listing.save();
+  await listing.populate("owner", "username createdAt");
+
+  res.json({
+    message: `Listing status updated to ${listing.status}.`,
+    listing: formatPublicListing(listing, { includeBlockedDates: true }),
+  });
+};
+
+module.exports.addAvailabilityBlock = async (req, res) => {
+  const listing = req.listing;
+  const startDate = new Date(req.body.startDate);
+  const endDate = new Date(req.body.endDate);
+
+  const overlaps = (listing.blockedDates || []).some((block) => {
+    return startDate < new Date(block.endDate) && endDate > new Date(block.startDate);
+  });
+
+  if (overlaps) {
+    throw new ExpressError(
+      409,
+      "This date range overlaps with an existing blocked period."
+    );
+  }
+
+  listing.blockedDates.push({
+    startDate,
+    endDate,
+    reason: req.body.reason || "Host blocked",
+  });
+  await listing.save();
+
+  res.status(201).json({
+    message: "Availability block added.",
+    blockedDates: listing.blockedDates,
+  });
+};
+
+module.exports.removeAvailabilityBlock = async (req, res) => {
+  const listing = req.listing;
+  const { blockId } = req.params;
+
+  if (!mongoose.isValidObjectId(blockId)) {
+    throw new ExpressError(400, "Invalid availability block ID.");
+  }
+
+  const beforeLen = listing.blockedDates.length;
+  listing.blockedDates = listing.blockedDates.filter(
+    (b) => !b._id.equals(blockId)
+  );
+
+  if (listing.blockedDates.length === beforeLen) {
+    throw new ExpressError(404, "Blocked date range not found.");
+  }
+
+  await listing.save();
+
+  res.json({
+    message: "Availability block removed.",
+    blockedDates: listing.blockedDates,
+  });
+};
+
+module.exports.getHostReviews = async (req, res) => {
+  const listings = await Listing.find({ owner: req.user._id })
+    .select("title location reviews")
+    .populate({
+      path: "reviews",
+      populate: { path: "author", select: "username" },
+      options: { sort: { createdAt: -1 } },
+    });
+
+  const reviews = [];
+  for (const listing of listings) {
+    for (const review of listing.reviews || []) {
+      reviews.push({
+        _id: review._id,
+        rating: review.rating,
+        comment: review.comment,
+        createdAt: review.createdAt,
+        author: review.author,
+        listing: {
+          _id: listing._id,
+          title: listing.title,
+          location: listing.location,
+        },
+      });
+    }
+  }
+
+  reviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  res.json({ reviews });
+};
+
+module.exports.getHostBookings = async (req, res) => {
+  const BookingModel = mongoose.models.Booking;
+  if (!BookingModel) {
+    return res.json({ bookings: [] });
+  }
+
+  const bookings = await BookingModel.find({ host: req.user._id })
+    .populate("listing", "title location country image")
+    .populate("guest", "username")
+    .sort({ createdAt: -1 });
+
+  res.json({ bookings });
 };
