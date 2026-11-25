@@ -10,6 +10,7 @@ import {
   getTodayDateInput,
   hasUnavailableOverlap,
 } from "../utils/bookingPricing";
+import { openRazorpayCheckout } from "../utils/razorpay";
 
 function getDraftKey(listingId) {
   return `livora_booking_draft_${listingId}`;
@@ -58,7 +59,7 @@ export default function BookingCard({ listing, isOwner }) {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [pendingBooking, setPendingBooking] = useState(null);
+  const [activeBooking, setActiveBooking] = useState(null);
 
   useEffect(() => {
     let ignore = false;
@@ -72,7 +73,7 @@ export default function BookingCard({ listing, isOwner }) {
           setUnavailableRanges(data.unavailableRanges || []);
         }
       } catch {
-        // Non-blocking: backend still enforces availability on submit
+        // Non-blocking: backend enforces availability on submit
       }
     }
 
@@ -82,7 +83,6 @@ export default function BookingCard({ listing, isOwner }) {
     };
   }, [listing._id]);
 
-  // Persist draft in sessionStorage so login redirect keeps user's selections
   useEffect(() => {
     if (checkIn || checkOut || guestsCount > 1) {
       sessionStorage.setItem(
@@ -111,6 +111,71 @@ export default function BookingCard({ listing, isOwner }) {
 
   const reviewCount = listing.reviewCount ?? listing.reviews?.length ?? 0;
   const averageRating = listing.averageRating ?? 0;
+
+  const initiateRazorpayPayment = async (booking) => {
+    let createdOrderId = null;
+    try {
+      const { data: orderData } = await apiClient.post(
+        "/api/payments/razorpay/order",
+        { bookingId: booking._id }
+      );
+      createdOrderId = orderData.order.id;
+
+      const rzpResponse = await openRazorpayCheckout({
+        keyId: orderData.order.keyId,
+        orderId: orderData.order.id,
+        amount: orderData.order.amount,
+        currency: orderData.order.currency,
+        title: "Livora",
+        description: `${listing.title} (${booking.nights} night${
+          booking.nights === 1 ? "" : "s"
+        })`,
+        prefill: {
+          name: user?.username || "",
+          email: user?.email || "",
+        },
+      });
+
+      const { data: verifyData } = await apiClient.post(
+        "/api/payments/razorpay/verify",
+        {
+          bookingId: booking._id,
+          razorpay_order_id: rzpResponse.razorpay_order_id,
+          razorpay_payment_id: rzpResponse.razorpay_payment_id,
+          razorpay_signature: rzpResponse.razorpay_signature,
+        }
+      );
+
+      setActiveBooking(verifyData.booking);
+      setUnavailableRanges((prev) => [
+        ...prev,
+        {
+          startDate: verifyData.booking.checkIn,
+          endDate: verifyData.booking.checkOut,
+          source: "booked",
+        },
+      ]);
+      showSuccess("Payment verified and booking confirmed!");
+    } catch (payErr) {
+      const reason = getApiErrorMessage(payErr, "Payment was not completed.");
+      if (createdOrderId) {
+        try {
+          const { data: failData } = await apiClient.post(
+            "/api/payments/razorpay/failure",
+            {
+              bookingId: booking._id,
+              razorpay_order_id: createdOrderId,
+              reason,
+            }
+          );
+          setActiveBooking(failData.booking);
+        } catch {
+          // ignore secondary reporting failure
+        }
+      }
+      setError(reason);
+    }
+  };
 
   const handleReserve = async (e) => {
     e.preventDefault();
@@ -145,18 +210,21 @@ export default function BookingCard({ listing, isOwner }) {
         guestsCount: Number(guestsCount),
       });
       sessionStorage.removeItem(getDraftKey(listing._id));
-      setPendingBooking(data.booking);
-      setUnavailableRanges((prev) => [
-        ...prev,
-        {
-          startDate: data.booking.checkIn,
-          endDate: data.booking.checkOut,
-          source: "booked",
-        },
-      ]);
-      showSuccess("Dates reserved! Payment confirmation will be completed via Razorpay in Phase 5.");
+      setActiveBooking(data.booking);
+      await initiateRazorpayPayment(data.booking);
     } catch (err) {
       setError(getApiErrorMessage(err, "Unable to create reservation."));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRetryPayment = async () => {
+    if (!activeBooking) return;
+    setError("");
+    setSubmitting(true);
+    try {
+      await initiateRazorpayPayment(activeBooking);
     } finally {
       setSubmitting(false);
     }
@@ -189,7 +257,10 @@ export default function BookingCard({ listing, isOwner }) {
         <form onSubmit={handleReserve}>
           <div className="row g-2 mb-2">
             <div className="col-6">
-              <label htmlFor="booking-checkin" className="form-label small fw-semibold mb-1">
+              <label
+                htmlFor="booking-checkin"
+                className="form-label small fw-semibold mb-1"
+              >
                 CHECK-IN
               </label>
               <input
@@ -204,25 +275,32 @@ export default function BookingCard({ listing, isOwner }) {
                   if (checkOut && checkOut <= val) {
                     setCheckOut(addDaysDateInput(val, 1));
                   }
-                  setPendingBooking(null);
+                  setActiveBooking(null);
                 }}
                 required
               />
             </div>
 
             <div className="col-6">
-              <label htmlFor="booking-checkout" className="form-label small fw-semibold mb-1">
+              <label
+                htmlFor="booking-checkout"
+                className="form-label small fw-semibold mb-1"
+              >
                 CHECKOUT
               </label>
               <input
                 id="booking-checkout"
                 type="date"
                 className="form-control form-control-sm"
-                min={checkIn ? addDaysDateInput(checkIn, 1) : addDaysDateInput(today, 1)}
+                min={
+                  checkIn
+                    ? addDaysDateInput(checkIn, 1)
+                    : addDaysDateInput(today, 1)
+                }
                 value={checkOut}
                 onChange={(e) => {
                   setCheckOut(e.target.value);
-                  setPendingBooking(null);
+                  setActiveBooking(null);
                 }}
                 required
               />
@@ -230,7 +308,10 @@ export default function BookingCard({ listing, isOwner }) {
           </div>
 
           <div className="mb-3">
-            <label htmlFor="booking-guests" className="form-label small fw-semibold mb-1">
+            <label
+              htmlFor="booking-guests"
+              className="form-label small fw-semibold mb-1"
+            >
               GUESTS (MAX {maxGuests})
             </label>
             <select
@@ -249,7 +330,7 @@ export default function BookingCard({ listing, isOwner }) {
             </select>
           </div>
 
-          {hasConflict && (
+          {hasConflict && !activeBooking && (
             <div className="alert alert-warning py-2 px-3 small mb-3">
               These dates conflict with an existing reservation or host block.
             </div>
@@ -261,26 +342,41 @@ export default function BookingCard({ listing, isOwner }) {
             </div>
           )}
 
-          <button
-            type="submit"
-            className="btn add-btn text-white w-100 py-2 fw-semibold rounded-3"
-            disabled={submitting || hasConflict}
-          >
-            {submitting
-              ? "Reserving..."
-              : user
-              ? "Reserve"
-              : "Log in to Reserve"}
-          </button>
+          {activeBooking &&
+          ["Pending", "Payment Failed"].includes(activeBooking.status) ? (
+            <button
+              type="button"
+              className="btn add-btn text-white w-100 py-2 fw-semibold rounded-3"
+              onClick={handleRetryPayment}
+              disabled={submitting}
+            >
+              {submitting ? "Opening Razorpay..." : "Retry Razorpay Payment"}
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="btn add-btn text-white w-100 py-2 fw-semibold rounded-3"
+              disabled={submitting || hasConflict}
+            >
+              {submitting
+                ? "Processing..."
+                : user
+                ? "Reserve & Pay (Razorpay)"
+                : "Log in to Reserve"}
+            </button>
+          )}
 
           {breakdown && (
             <div className="mt-3 pt-3 border-top small">
               <div className="d-flex justify-content-between mb-2">
                 <span className="text-muted">
-                  &#8377;{breakdown.pricePerNight.toLocaleString("en-IN")} &times;{" "}
-                  {breakdown.nights} night{breakdown.nights === 1 ? "" : "s"}
+                  &#8377;{breakdown.pricePerNight.toLocaleString("en-IN")}{" "}
+                  &times; {breakdown.nights} night
+                  {breakdown.nights === 1 ? "" : "s"}
                 </span>
-                <span>&#8377;{breakdown.baseAmount.toLocaleString("en-IN")}</span>
+                <span>
+                  &#8377;{breakdown.baseAmount.toLocaleString("en-IN")}
+                </span>
               </div>
 
               {breakdown.cleaningFee > 0 && (
@@ -294,7 +390,9 @@ export default function BookingCard({ listing, isOwner }) {
 
               <div className="d-flex justify-content-between mb-2">
                 <span className="text-muted">Livora service fee (12%)</span>
-                <span>&#8377;{breakdown.serviceFee.toLocaleString("en-IN")}</span>
+                <span>
+                  &#8377;{breakdown.serviceFee.toLocaleString("en-IN")}
+                </span>
               </div>
 
               <div className="d-flex justify-content-between mb-2">
@@ -304,22 +402,32 @@ export default function BookingCard({ listing, isOwner }) {
 
               <div className="d-flex justify-content-between fw-bold fs-6 pt-2 border-top">
                 <span>Total</span>
-                <span>&#8377;{breakdown.totalAmount.toLocaleString("en-IN")}</span>
+                <span>
+                  &#8377;{breakdown.totalAmount.toLocaleString("en-IN")}
+                </span>
               </div>
             </div>
           )}
 
-          {pendingBooking && (
-            <div className="alert alert-info mt-3 mb-0 small">
+          {activeBooking && (
+            <div
+              className={`alert mt-3 mb-0 small ${
+                activeBooking.status === "Confirmed"
+                  ? "alert-success"
+                  : activeBooking.status === "Payment Failed"
+                  ? "alert-warning"
+                  : "alert-info"
+              }`}
+            >
               <div className="fw-semibold mb-1">
-                Reservation Hold Created ({pendingBooking.status})
+                Booking {activeBooking.status} ({activeBooking.paymentStatus})
               </div>
               <div>
-                Booking ID: <code>{pendingBooking._id}</code>
+                Booking ID: <code>{activeBooking._id}</code>
               </div>
               <div>
-                Total Payable: &#8377;
-                {Number(pendingBooking.totalAmount).toLocaleString("en-IN")}
+                Total: &#8377;
+                {Number(activeBooking.totalAmount).toLocaleString("en-IN")}
               </div>
             </div>
           )}

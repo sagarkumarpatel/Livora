@@ -197,3 +197,35 @@ module.exports.getHostBookings = async (req, res) => {
 
   res.json({ bookings });
 };
+
+module.exports.completeHostBooking = async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) {
+    throw new ExpressError(400, "Invalid booking ID.");
+  }
+
+  const BookingModel = mongoose.models.Booking;
+  const booking = await BookingModel.findById(id);
+  if (!booking) {
+    throw new ExpressError(404, "Booking not found.");
+  }
+
+  if (!booking.host.equals(req.user._id)) {
+    throw new ExpressError(403, "You are not the host for this booking.");
+  }
+
+  if (booking.status !== "Confirmed" || booking.paymentStatus !== "Paid") {
+    throw new ExpressError(
+      400,
+      "Only confirmed and paid bookings can be marked as Completed."
+    );
+  }
+
+  booking.status = "Completed";
+  await booking.save();
+
+  res.json({
+    message: "Booking marked as Completed.",
+    booking,
+  });
+};

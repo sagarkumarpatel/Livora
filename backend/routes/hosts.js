@@ -78,4 +78,11 @@ router.get(
   wrapAsync(hostController.getHostBookings)
 );
 
+router.patch(
+  "/bookings/:id/complete",
+  requireAuth,
+  requireHost,
+  wrapAsync(hostController.completeHostBooking)
+);
+
 module.exports = router;

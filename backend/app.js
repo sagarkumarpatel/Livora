@@ -12,6 +12,7 @@ const hostsRouter = require("./routes/hosts");
 const listingsRouter = require("./routes/listings");
 const reviewsRouter = require("./routes/reviews");
 const bookingsRouter = require("./routes/bookings");
+const paymentsRouter = require("./routes/payments");
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.use("/api/hosts", hostsRouter);
 app.use("/api/listings", listingsRouter);
 app.use("/api/listings/:id/reviews", reviewsRouter);
 app.use("/api/bookings", bookingsRouter);
+app.use("/api/payments", paymentsRouter);
 
 app.use((req, res, next) => {
   next(new ExpressError(404, "API route not found."));

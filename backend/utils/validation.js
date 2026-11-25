@@ -104,6 +104,23 @@ const createBookingValidationSchema = Joi.object({
   guestsCount: Joi.number().integer().min(1).max(30).required(),
 });
 
+const createPaymentOrderValidationSchema = Joi.object({
+  bookingId: Joi.string().trim().required(),
+});
+
+const verifyRazorpayPaymentValidationSchema = Joi.object({
+  bookingId: Joi.string().trim().required(),
+  razorpay_order_id: Joi.string().trim().required(),
+  razorpay_payment_id: Joi.string().trim().required(),
+  razorpay_signature: Joi.string().trim().required(),
+});
+
+const reportPaymentFailureValidationSchema = Joi.object({
+  bookingId: Joi.string().trim().required(),
+  razorpay_order_id: Joi.string().trim().allow("", null),
+  reason: Joi.string().trim().max(300).allow("", null),
+});
+
 module.exports = {
   listingValidationSchema,
   listingStatusValidationSchema,
@@ -114,4 +131,7 @@ module.exports = {
   hostOnboardingValidationSchema,
   bookingQuoteValidationSchema,
   createBookingValidationSchema,
+  createPaymentOrderValidationSchema,
+  verifyRazorpayPaymentValidationSchema,
+  reportPaymentFailureValidationSchema,
 };

@@ -168,6 +168,22 @@ export default function HostDashboardPage() {
     }
   };
 
+  const handleCompleteBooking = async (bookingId) => {
+    try {
+      const { data } = await apiClient.patch(
+        `/api/hosts/bookings/${bookingId}/complete`
+      );
+      setBookings((prev) =>
+        prev.map((b) =>
+          b._id === bookingId ? { ...b, status: data.booking.status } : b
+        )
+      );
+      showSuccess("Booking marked as Completed.");
+    } catch (err) {
+      showError(getApiErrorMessage(err, "Failed to complete booking."));
+    }
+  };
+
   if (loading) {
     return (
       <div className="d-flex justify-content-center py-5">
@@ -463,7 +479,9 @@ export default function HostDashboardPage() {
                     <th>Guest</th>
                     <th>Dates</th>
                     <th>Total</th>
+                    <th>Payment</th>
                     <th>Status</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -480,8 +498,27 @@ export default function HostDashboardPage() {
                       </td>
                       <td>
                         <span className="badge text-bg-light border">
+                          {b.paymentStatus}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="badge text-bg-light border">
                           {b.status}
                         </span>
+                      </td>
+                      <td>
+                        {b.status === "Confirmed" &&
+                        b.paymentStatus === "Paid" ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-success"
+                            onClick={() => handleCompleteBooking(b._id)}
+                          >
+                            Mark Completed
+                          </button>
+                        ) : (
+                          <span className="text-muted small">-</span>
+                        )}
                       </td>
                     </tr>
                   ))}
