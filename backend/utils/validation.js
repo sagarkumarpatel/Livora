@@ -87,6 +87,23 @@ const hostOnboardingValidationSchema = Joi.object({
   bio: Joi.string().trim().max(1000).allow("").default(""),
 });
 
+const bookingQuoteValidationSchema = Joi.object({
+  checkIn: Joi.date().iso().required(),
+  checkOut: Joi.date().iso().greater(Joi.ref("checkIn")).required().messages({
+    "date.greater": "Check-out date must be after check-in date.",
+  }),
+  guestsCount: Joi.number().integer().min(1).max(30).required(),
+});
+
+const createBookingValidationSchema = Joi.object({
+  listingId: Joi.string().trim().required(),
+  checkIn: Joi.date().iso().required(),
+  checkOut: Joi.date().iso().greater(Joi.ref("checkIn")).required().messages({
+    "date.greater": "Check-out date must be after check-in date.",
+  }),
+  guestsCount: Joi.number().integer().min(1).max(30).required(),
+});
+
 module.exports = {
   listingValidationSchema,
   listingStatusValidationSchema,
@@ -95,4 +112,6 @@ module.exports = {
   signupValidationSchema,
   loginValidationSchema,
   hostOnboardingValidationSchema,
+  bookingQuoteValidationSchema,
+  createBookingValidationSchema,
 };

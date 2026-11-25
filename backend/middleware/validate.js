@@ -7,6 +7,8 @@ const {
   signupValidationSchema,
   loginValidationSchema,
   hostOnboardingValidationSchema,
+  bookingQuoteValidationSchema,
+  createBookingValidationSchema,
 } = require("../utils/validation");
 
 function parseStringArrayField(rawValue) {
@@ -63,4 +65,6 @@ module.exports = {
   validateSignup: makeValidator(signupValidationSchema),
   validateLogin: makeValidator(loginValidationSchema),
   validateHostOnboarding: makeValidator(hostOnboardingValidationSchema),
+  validateBookingQuote: makeValidator(bookingQuoteValidationSchema),
+  validateCreateBooking: makeValidator(createBookingValidationSchema),
 };

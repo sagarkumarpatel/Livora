@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import apiClient, { getApiErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useFlash } from "../context/FlashContext";
+import BookingCard from "../components/BookingCard";
 import ListingMap from "../components/ListingMap";
 import StarRating from "../components/StarRating";
 
@@ -54,18 +55,6 @@ export default function ListingDetailPage() {
       showError(getApiErrorMessage(err, "Failed to delete listing."));
       setDeleting(false);
     }
-  };
-
-  const handleBookingIntent = () => {
-    if (!user) {
-      showError("Please log in to book this property.");
-      navigate("/login", { state: { from: location.pathname } });
-      return;
-    }
-
-    showSuccess(
-      "Booking checkout and availability selection will be enabled in Phase 4."
-    );
   };
 
   const handleReviewSubmit = async (e) => {
@@ -153,10 +142,6 @@ export default function ListingDetailPage() {
   const isOwner = Boolean(
     user && listing.owner && user._id === listing.owner._id
   );
-  const priceText =
-    listing.price != null
-      ? `₹${Number(listing.price).toLocaleString("en-IN")}`
-      : "Price unavailable";
   const reviewCount = listing.reviewCount ?? listing.reviews?.length ?? 0;
   const averageRating = listing.averageRating ?? 0;
 
@@ -404,49 +389,7 @@ export default function ListingDetailPage() {
 
         {/* Right column: Booking summary card */}
         <div className="col-lg-4">
-          <div
-            className="card p-4 shadow-sm rounded-4 sticky-top"
-            style={{ top: "6rem" }}
-          >
-            <div className="d-flex justify-content-between align-items-baseline mb-3">
-              <div>
-                <span className="fs-4 fw-bold">{priceText}</span>{" "}
-                <span className="text-muted">night</span>
-              </div>
-              <span className="small text-muted">
-                <i className="fa-solid fa-star star-icon me-1" />
-                {reviewCount > 0 ? Number(averageRating).toFixed(1) : "New"}
-              </span>
-            </div>
-
-            <div className="border rounded-3 p-3 mb-3 bg-light small text-muted">
-              <div>
-                <strong>Max capacity:</strong> {listing.maxGuests ?? 2} guests
-              </div>
-              {listing.cleaningFee > 0 && (
-                <div>
-                  <strong>Cleaning fee:</strong> &#8377;
-                  {Number(listing.cleaningFee).toLocaleString("en-IN")}
-                </div>
-              )}
-              <div>
-                <strong>Location:</strong> {listing.location}, {listing.country}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="btn add-btn text-white w-100 py-2 fw-semibold rounded-3"
-              onClick={handleBookingIntent}
-            >
-              {user ? "Reserve" : "Log in to Reserve"}
-            </button>
-            <p className="text-center text-muted small mt-2 mb-0">
-              {user
-                ? "Select dates & complete reservation"
-                : "Browsing is free — sign in only when you book"}
-            </p>
-          </div>
+          <BookingCard listing={listing} isOwner={isOwner} />
         </div>
       </div>
 

@@ -2,13 +2,17 @@ const express = require("express");
 const router = express.Router();
 const wrapAsync = require("../utils/wrapAsync");
 const listingController = require("../controllers/listings");
+const bookingController = require("../controllers/bookings");
 const {
   optionalAuth,
   requireAuth,
   requireHost,
   isOwner,
 } = require("../middleware/auth");
-const { validateListing } = require("../middleware/validate");
+const {
+  validateListing,
+  validateBookingQuote,
+} = require("../middleware/validate");
 const { upload } = require("../config/cloudinary");
 
 const listingUpload = upload.fields([
@@ -44,5 +48,16 @@ router
     isOwner,
     wrapAsync(listingController.destroyListing)
   );
+
+router.get(
+  "/:id/availability",
+  wrapAsync(bookingController.getListingAvailability)
+);
+
+router.post(
+  "/:id/quote",
+  validateBookingQuote,
+  wrapAsync(bookingController.getBookingQuote)
+);
 
 module.exports = router;
