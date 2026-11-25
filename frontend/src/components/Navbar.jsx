@@ -77,6 +77,11 @@ export default function Navbar() {
           </div>
 
           <div className="navbar-nav ms-auto align-items-md-center">
+            {user && (
+              <Link className="nav-link fw-semibold" to="/my-bookings">
+                My Bookings
+              </Link>
+            )}
             {user?.isHost ? (
               <Link className="nav-link fw-semibold" to="/host/dashboard">
                 Host Dashboard

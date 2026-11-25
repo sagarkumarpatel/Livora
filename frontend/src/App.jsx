@@ -10,6 +10,7 @@ import CreateListingPage from "./pages/CreateListingPage";
 import EditListingPage from "./pages/EditListingPage";
 import BecomeHostPage from "./pages/BecomeHostPage";
 import HostDashboardPage from "./pages/HostDashboardPage";
+import MyBookingsPage from "./pages/MyBookingsPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import StaticInfoPage from "./pages/StaticInfoPage";
@@ -28,6 +29,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <BecomeHostPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-bookings"
+            element={
+              <ProtectedRoute>
+                <MyBookingsPage />
               </ProtectedRoute>
             }
           />

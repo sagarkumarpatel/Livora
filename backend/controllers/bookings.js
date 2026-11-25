@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Booking = require("../models/booking");
 const Listing = require("../models/listing");
+const Payment = require("../models/payment");
 const ExpressError = require("../utils/expressError");
 const {
   PENDING_HOLD_MINUTES,
@@ -213,5 +214,73 @@ module.exports.createBooking = async (req, res) => {
   res.status(201).json({
     message: "Reservation hold created. Complete payment to confirm.",
     booking: createdBooking,
+  });
+};
+
+module.exports.getMyBookings = async (req, res) => {
+  const bookings = await Booking.find({ guest: req.user._id })
+    .populate("listing", "title location country image images price")
+    .populate("host", "username")
+    .sort({ createdAt: -1 });
+
+  res.json({ bookings });
+};
+
+module.exports.cancelMyBooking = async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) {
+    throw new ExpressError(400, "Invalid booking ID.");
+  }
+
+  const booking = await Booking.findById(id);
+  if (!booking) {
+    throw new ExpressError(404, "Booking not found.");
+  }
+
+  if (!booking.guest.equals(req.user._id)) {
+    throw new ExpressError(403, "You are not authorized to cancel this booking.");
+  }
+
+  if (["Completed", "Cancelled"].includes(booking.status)) {
+    throw new ExpressError(
+      400,
+      `Cannot cancel a booking that is already ${booking.status}.`
+    );
+  }
+
+  const today = getTodayUtc();
+  const checkInDate = normalizeUtcDate(booking.checkIn);
+  if (booking.status === "Confirmed" && checkInDate && checkInDate <= today) {
+    throw new ExpressError(
+      400,
+      "Confirmed bookings cannot be cancelled on or after the check-in date."
+    );
+  }
+
+  const wasPaid = booking.paymentStatus === "Paid";
+  booking.status = "Cancelled";
+  booking.cancelledAt = new Date();
+  booking.expiresAt = null;
+  if (wasPaid) {
+    booking.paymentStatus = "Refunded";
+  }
+
+  await booking.save();
+
+  if (wasPaid) {
+    await Payment.updateMany(
+      { booking: booking._id, status: "Paid" },
+      { status: "Refunded" }
+    );
+  }
+
+  await booking.populate("listing", "title location country image images price");
+  await booking.populate("host", "username");
+
+  res.json({
+    message: wasPaid
+      ? "Booking cancelled and refund initiated."
+      : "Booking cancelled successfully.",
+    booking,
   });
 };
