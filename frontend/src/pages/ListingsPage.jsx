@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import apiClient, { getApiErrorMessage } from "../api/client";
+import ListingCard from "../components/ListingCard";
 import { LISTING_CATEGORIES } from "../constants/categories";
 
 export default function ListingsPage() {
@@ -101,7 +102,7 @@ export default function ListingsPage() {
       {(activeSearch || activeCategory) && (
         <div className="d-flex align-items-center justify-content-between mt-3 mb-1">
           <span className="text-muted small">
-            Showing results
+            Showing {listings.length} stay{listings.length === 1 ? "" : "s"}
             {activeCategory ? ` in "${activeCategory}"` : ""}
             {activeSearch ? ` for "${activeSearch}"` : ""}
           </span>
@@ -131,7 +132,7 @@ export default function ListingsPage() {
 
       {!loading && !error && listings.length === 0 && (
         <div className="text-center py-5 text-muted">
-          <p className="fs-5 mb-2">No listings found.</p>
+          <p className="fs-5 mb-2">No published listings match your search.</p>
           {(activeSearch || activeCategory) && (
             <button
               type="button"
@@ -145,50 +146,14 @@ export default function ListingsPage() {
       )}
 
       {!loading && !error && listings.length > 0 && (
-        <div className="row row-cols-lg-3 row-cols-md-2 row-cols-sm-1 mt-3">
-          {listings.map((listing) => {
-            const basePrice =
-              listing.price != null ? Number(listing.price) : null;
-            const displayPrice =
-              basePrice != null
-                ? showTaxes
-                  ? Math.round(basePrice * 1.18)
-                  : basePrice
-                : null;
-
-            return (
-              <Link
-                key={listing._id}
-                to={`/listings/${listing._id}`}
-                className="listing-link text-dark"
-              >
-                <div className="card col listing-card">
-                  <img
-                    src={listing.image?.url}
-                    className="card-img-top"
-                    alt={listing.title}
-                    style={{ height: "20rem" }}
-                  />
-                  <div className="card-img-overlay" />
-                  <div className="card-body mt-2">
-                    <p className="card-text">
-                      <b>{listing.title}</b>
-                      <br />
-                      {displayPrice != null
-                        ? `₹${displayPrice.toLocaleString("en-IN")}/night`
-                        : "N/A"}
-                      {showTaxes && (
-                        <i className="tax-info d-inline">
-                          {" "}
-                          &nbsp;(incl. 18% GST)
-                        </i>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
+        <div className="row row-cols-lg-3 row-cols-md-2 row-cols-1 g-4 mt-2 mb-5">
+          {listings.map((listing) => (
+            <ListingCard
+              key={listing._id}
+              listing={listing}
+              showTaxes={showTaxes}
+            />
+          ))}
         </div>
       )}
     </>

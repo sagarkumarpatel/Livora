@@ -11,28 +11,105 @@ function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Formats a listing document for public consumption without exposing private owner data.
+ */
+function formatPublicListing(doc, { includeReviews = false } = {}) {
+  const plain = doc.toObject ? doc.toObject() : { ...doc };
+  const images =
+    Array.isArray(plain.images) && plain.images.length > 0
+      ? plain.images
+      : plain.image?.url
+      ? [plain.image]
+      : [];
+
+  const populatedReviews = Array.isArray(plain.reviews) ? plain.reviews : [];
+  const hasPopulatedRatings =
+    populatedReviews.length > 0 && typeof populatedReviews[0] === "object";
+
+  let reviewCount = plain.reviewCount ?? populatedReviews.length;
+  let averageRating = plain.averageRating ?? 0;
+
+  if (hasPopulatedRatings) {
+    reviewCount = populatedReviews.length;
+    const sum = populatedReviews.reduce(
+      (acc, r) => acc + (Number(r.rating) || 0),
+      0
+    );
+    averageRating =
+      reviewCount > 0 ? Number((sum / reviewCount).toFixed(2)) : 0;
+  }
+
+  const publicOwner =
+    plain.owner && typeof plain.owner === "object"
+      ? {
+          _id: plain.owner._id,
+          username: plain.owner.username,
+          joinedAt: plain.owner.createdAt || null,
+        }
+      : plain.owner || null;
+
+  const formatted = {
+    _id: plain._id,
+    title: plain.title,
+    description: plain.description,
+    image: plain.image || images[0] || null,
+    images,
+    price: plain.price,
+    cleaningFee: plain.cleaningFee ?? 0,
+    location: plain.location,
+    country: plain.country,
+    category: plain.category || "Trending",
+    propertyType: plain.propertyType || "Entire home",
+    maxGuests: plain.maxGuests ?? 2,
+    bedrooms: plain.bedrooms ?? 1,
+    bathrooms: plain.bathrooms ?? 1,
+    amenities: Array.isArray(plain.amenities) ? plain.amenities : [],
+    status: plain.status || "published",
+    averageRating,
+    reviewCount,
+    owner: publicOwner,
+    geometry: plain.geometry,
+    createdAt: plain.createdAt,
+  };
+
+  if (includeReviews) {
+    formatted.reviews = populatedReviews;
+  }
+
+  return formatted;
+}
+
 module.exports.index = async (req, res) => {
   const { search, category } = req.query;
-  const filter = {};
+  const conditions = [
+    { $or: [{ status: "published" }, { status: { $exists: false } }] },
+  ];
 
   if (category && category.trim() && category !== "All") {
-    filter.category = category.trim();
+    conditions.push({ category: category.trim() });
   }
 
   if (search && search.trim()) {
     const regex = new RegExp(escapeRegex(search.trim()), "i");
-    filter.$or = [
-      { title: regex },
-      { location: regex },
-      { country: regex },
-      { description: regex },
-    ];
+    conditions.push({
+      $or: [
+        { title: regex },
+        { location: regex },
+        { country: regex },
+        { description: regex },
+      ],
+    });
   }
 
-  const listings = await Listing.find(filter)
-    .populate("owner", "username")
+  const filter = conditions.length === 1 ? conditions[0] : { $and: conditions };
+
+  const docs = await Listing.find(filter)
+    .populate("owner", "username createdAt")
+    .populate("reviews", "rating")
     .sort({ createdAt: -1 });
 
+  const listings = docs.map((doc) => formatPublicListing(doc));
   res.json({ listings });
 };
 
@@ -48,13 +125,23 @@ module.exports.showListing = async (req, res) => {
       populate: { path: "author", select: "username" },
       options: { sort: { createdAt: -1 } },
     })
-    .populate("owner", "username email");
+    .populate("owner", "username createdAt");
 
   if (!listing) {
     throw new ExpressError(404, "Listing you requested does not exist!");
   }
 
-  res.json({ listing });
+  const listingStatus = listing.status || "published";
+  const isOwnerViewer =
+    req.user && listing.owner && listing.owner._id.equals(req.user._id);
+
+  if (listingStatus !== "published" && !isOwnerViewer) {
+    throw new ExpressError(404, "Listing you requested does not exist!");
+  }
+
+  res.json({
+    listing: formatPublicListing(listing, { includeReviews: true }),
+  });
 };
 
 module.exports.createListing = async (req, res) => {
@@ -69,15 +156,16 @@ module.exports.createListing = async (req, res) => {
     ...req.body,
     owner: req.user._id,
     image,
+    images: [image],
     geometry,
   });
 
   await newListing.save();
-  await newListing.populate("owner", "username");
+  await newListing.populate("owner", "username createdAt");
 
   res.status(201).json({
     message: "New Listing Created!",
-    listing: newListing,
+    listing: formatPublicListing(newListing, { includeReviews: true }),
   });
 };
 
@@ -98,16 +186,18 @@ module.exports.updateListing = async (req, res) => {
 
   if (req.file) {
     const oldFilename = listing.image?.filename;
-    listing.image = await uploadToCloudinary(req.file.buffer);
+    const uploaded = await uploadToCloudinary(req.file.buffer);
+    listing.image = uploaded;
+    listing.images = [uploaded];
     await deleteFromCloudinary(oldFilename);
   }
 
   await listing.save();
-  await listing.populate("owner", "username");
+  await listing.populate("owner", "username createdAt");
 
   res.json({
     message: "Listing Updated!",
-    listing,
+    listing: formatPublicListing(listing, { includeReviews: true }),
   });
 };
 

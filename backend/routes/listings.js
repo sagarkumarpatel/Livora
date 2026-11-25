@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const wrapAsync = require("../utils/wrapAsync");
 const listingController = require("../controllers/listings");
-const { requireAuth, isOwner } = require("../middleware/auth");
+const { optionalAuth, requireAuth, isOwner } = require("../middleware/auth");
 const { validateListing } = require("../middleware/validate");
 const { upload } = require("../config/cloudinary");
 
@@ -18,7 +18,7 @@ router
 
 router
   .route("/:id")
-  .get(wrapAsync(listingController.showListing))
+  .get(optionalAuth, wrapAsync(listingController.showListing))
   .put(
     requireAuth,
     isOwner,

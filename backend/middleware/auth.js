@@ -21,6 +21,24 @@ function extractToken(req) {
   return null;
 }
 
+const optionalAuth = async (req, res, next) => {
+  const token = extractToken(req);
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, getJwtSecret());
+    const user = await User.findById(decoded.id).select("_id username email");
+    req.user = user || null;
+  } catch {
+    req.user = null;
+  }
+
+  next();
+};
+
 const requireAuth = wrapAsync(async (req, res, next) => {
   const token = extractToken(req);
   if (!token) {
@@ -84,6 +102,7 @@ const isReviewAuthor = wrapAsync(async (req, res, next) => {
 module.exports = {
   getJwtSecret,
   extractToken,
+  optionalAuth,
   requireAuth,
   isOwner,
   isReviewAuthor,
