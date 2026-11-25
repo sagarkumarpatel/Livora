@@ -90,7 +90,12 @@ body {
 /* Cards */
 .listing-card {
   border: none !important;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
+  transition: transform 0.18s ease;
+}
+
+.listing-card:hover {
+  transform: translateY(-2px);
 }
 
 .card-img-top {
@@ -114,7 +119,7 @@ body {
 }
 
 .card-img-overlay:hover {
-  opacity: 0.2;
+  opacity: 0.15;
   background-color: #ffffff;
 }
 
