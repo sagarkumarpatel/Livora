@@ -83,17 +83,12 @@ export default function EditListingPage() {
     );
   }
 
-  const thumbnailUrl = listing.image?.url?.includes("/upload")
-    ? listing.image.url.replace("/upload", "/upload/w_250")
-    : listing.image?.url;
-
   return (
     <div className="row mt-3 mb-5">
       <div className="col-lg-8 offset-lg-2">
         <h3 className="mb-3">Edit your Listing</h3>
         <ListingForm
           initialValues={listing}
-          existingImageUrl={thumbnailUrl}
           isEdit
           submitting={submitting}
           error={error}

@@ -8,10 +8,21 @@ const multer = require("multer");
 const User = require("./models/user");
 const ExpressError = require("./utils/expressError");
 const authRouter = require("./routes/auth");
+const hostsRouter = require("./routes/hosts");
 const listingsRouter = require("./routes/listings");
 const reviewsRouter = require("./routes/reviews");
+const bookingsRouter = require("./routes/bookings");
+const paymentsRouter = require("./routes/payments");
 
 const app = express();
+app.disable("x-powered-by");
+
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  next();
+});
 
 const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173")
   .split(",")
@@ -42,8 +53,11 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/hosts", hostsRouter);
 app.use("/api/listings", listingsRouter);
 app.use("/api/listings/:id/reviews", reviewsRouter);
+app.use("/api/bookings", bookingsRouter);
+app.use("/api/payments", paymentsRouter);
 
 app.use((req, res, next) => {
   next(new ExpressError(404, "API route not found."));

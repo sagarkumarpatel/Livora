@@ -57,6 +57,12 @@ function uploadToCloudinary(buffer, folder = "Livora_DEV") {
   });
 }
 
+async function uploadManyToCloudinary(files = [], folder = "Livora_DEV") {
+  return Promise.all(
+    files.map((file) => uploadToCloudinary(file.buffer, folder))
+  );
+}
+
 /**
  * Deletes an uploaded asset from Cloudinary by public_id (skips seeded placeholders).
  */
@@ -73,5 +79,6 @@ module.exports = {
   cloudinary,
   upload,
   uploadToCloudinary,
+  uploadManyToCloudinary,
   deleteFromCloudinary,
 };
