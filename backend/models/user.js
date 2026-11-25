@@ -11,6 +11,15 @@ const userSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
     },
+    isHost: {
+      type: Boolean,
+      default: false,
+    },
+    hostProfile: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "HostProfile",
+      default: null,
+    },
   },
   { timestamps: true }
 );

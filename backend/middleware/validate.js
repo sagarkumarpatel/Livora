@@ -4,6 +4,7 @@ const {
   reviewValidationSchema,
   signupValidationSchema,
   loginValidationSchema,
+  hostOnboardingValidationSchema,
 } = require("../utils/validation");
 
 function makeValidator(schema) {
@@ -28,4 +29,5 @@ module.exports = {
   validateReview: makeValidator(reviewValidationSchema),
   validateSignup: makeValidator(signupValidationSchema),
   validateLogin: makeValidator(loginValidationSchema),
+  validateHostOnboarding: makeValidator(hostOnboardingValidationSchema),
 };

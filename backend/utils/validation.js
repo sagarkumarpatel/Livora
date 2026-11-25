@@ -37,9 +37,26 @@ const loginValidationSchema = Joi.object({
   password: Joi.string().required(),
 });
 
+const phonePattern = /^[+]?[\d\s()-]{7,20}$/;
+
+const hostOnboardingValidationSchema = Joi.object({
+  fullName: Joi.string().trim().min(2).max(100).required(),
+  email: Joi.string().trim().email().required(),
+  phone: Joi.string()
+    .trim()
+    .pattern(phonePattern)
+    .required()
+    .messages({
+      "string.pattern.base": "Please enter a valid phone number (7-20 digits).",
+    }),
+  contactDetails: Joi.string().trim().min(5).max(300).required(),
+  bio: Joi.string().trim().max(1000).allow("").default(""),
+});
+
 module.exports = {
   listingValidationSchema,
   reviewValidationSchema,
   signupValidationSchema,
   loginValidationSchema,
+  hostOnboardingValidationSchema,
 };

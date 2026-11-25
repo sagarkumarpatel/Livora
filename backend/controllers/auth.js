@@ -29,6 +29,8 @@ function formatUser(user) {
     _id: user._id,
     username: user.username,
     email: user.email,
+    isHost: Boolean(user.isHost),
+    hostProfile: user.hostProfile || null,
   };
 }
 

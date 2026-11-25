@@ -3,10 +3,13 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import FlashBanner from "./components/FlashBanner";
 import ProtectedRoute from "./components/ProtectedRoute";
+import HostRoute from "./components/HostRoute";
 import ListingsPage from "./pages/ListingsPage";
 import ListingDetailPage from "./pages/ListingDetailPage";
 import CreateListingPage from "./pages/CreateListingPage";
 import EditListingPage from "./pages/EditListingPage";
+import BecomeHostPage from "./pages/BecomeHostPage";
+import HostDashboardPage from "./pages/HostDashboardPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import StaticInfoPage from "./pages/StaticInfoPage";
@@ -21,19 +24,35 @@ export default function App() {
           <Route path="/" element={<Navigate to="/listings" replace />} />
           <Route path="/listings" element={<ListingsPage />} />
           <Route
-            path="/listings/new"
+            path="/become-a-host"
             element={
               <ProtectedRoute>
-                <CreateListingPage />
+                <BecomeHostPage />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/host/dashboard"
+            element={
+              <HostRoute>
+                <HostDashboardPage />
+              </HostRoute>
+            }
+          />
+          <Route
+            path="/listings/new"
+            element={
+              <HostRoute>
+                <CreateListingPage />
+              </HostRoute>
             }
           />
           <Route
             path="/listings/:id/edit"
             element={
-              <ProtectedRoute>
+              <HostRoute>
                 <EditListingPage />
-              </ProtectedRoute>
+              </HostRoute>
             }
           />
           <Route path="/listings/:id" element={<ListingDetailPage />} />

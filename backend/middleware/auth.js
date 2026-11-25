@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const User = require("../models/user");
+const HostProfile = require("../models/hostProfile");
 const Listing = require("../models/listing");
 const Review = require("../models/review");
 const ExpressError = require("../utils/expressError");
@@ -30,7 +31,9 @@ const optionalAuth = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, getJwtSecret());
-    const user = await User.findById(decoded.id).select("_id username email");
+    const user = await User.findById(decoded.id).select(
+      "_id username email isHost hostProfile"
+    );
     req.user = user || null;
   } catch {
     req.user = null;
@@ -52,12 +55,35 @@ const requireAuth = wrapAsync(async (req, res, next) => {
     throw new ExpressError(401, "Session expired or invalid. Please log in again.");
   }
 
-  const user = await User.findById(decoded.id).select("_id username email");
+  const user = await User.findById(decoded.id).select(
+    "_id username email isHost hostProfile"
+  );
   if (!user) {
     throw new ExpressError(401, "User account no longer exists.");
   }
 
   req.user = user;
+  next();
+});
+
+const requireHost = wrapAsync(async (req, res, next) => {
+  if (!req.user) {
+    throw new ExpressError(401, "You must be logged in to perform this action.");
+  }
+
+  const hostProfile = await HostProfile.findOne({ user: req.user._id });
+  if (!req.user.isHost || !hostProfile) {
+    throw new ExpressError(
+      403,
+      "Host registration is required to access host features."
+    );
+  }
+
+  if (hostProfile.status !== "active") {
+    throw new ExpressError(403, "Your host account is currently inactive.");
+  }
+
+  req.hostProfile = hostProfile;
   next();
 });
 
@@ -104,6 +130,7 @@ module.exports = {
   extractToken,
   optionalAuth,
   requireAuth,
+  requireHost,
   isOwner,
   isReviewAuthor,
 };

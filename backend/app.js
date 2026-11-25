@@ -8,6 +8,7 @@ const multer = require("multer");
 const User = require("./models/user");
 const ExpressError = require("./utils/expressError");
 const authRouter = require("./routes/auth");
+const hostsRouter = require("./routes/hosts");
 const listingsRouter = require("./routes/listings");
 const reviewsRouter = require("./routes/reviews");
 
@@ -42,6 +43,7 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/hosts", hostsRouter);
 app.use("/api/listings", listingsRouter);
 app.use("/api/listings/:id/reviews", reviewsRouter);
 
