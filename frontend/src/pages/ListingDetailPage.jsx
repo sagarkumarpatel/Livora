@@ -21,6 +21,8 @@ export default function ListingDetailPage() {
 
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
+  const [eligibleBookings, setEligibleBookings] = useState([]);
+  const [eligibilityLoaded, setEligibilityLoaded] = useState(false);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewValidated, setReviewValidated] = useState(false);
 
@@ -37,9 +39,31 @@ export default function ListingDetailPage() {
     }
   }, [id]);
 
+  const fetchReviewEligibility = useCallback(async () => {
+    if (!user) {
+      setEligibleBookings([]);
+      setEligibilityLoaded(false);
+      return;
+    }
+    try {
+      const { data } = await apiClient.get(
+        `/api/listings/${id}/reviews/eligibility`
+      );
+      setEligibleBookings(data.eligibleBookings || []);
+    } catch {
+      setEligibleBookings([]);
+    } finally {
+      setEligibilityLoaded(true);
+    }
+  }, [id, user]);
+
   useEffect(() => {
     fetchListing();
   }, [fetchListing]);
+
+  useEffect(() => {
+    fetchReviewEligibility();
+  }, [fetchReviewEligibility]);
 
   const handleDeleteListing = async () => {
     if (!window.confirm("Are you sure you want to delete this listing?")) {
@@ -69,6 +93,7 @@ export default function ListingDetailPage() {
       const { data } = await apiClient.post(`/api/listings/${id}/reviews`, {
         rating,
         comment: comment.trim(),
+        bookingId: eligibleBookings[0]?._id,
       });
       setListing((prev) => ({
         ...prev,
@@ -76,6 +101,7 @@ export default function ListingDetailPage() {
         reviewCount: data.reviewCount ?? (prev.reviews?.length || 0) + 1,
         reviews: [data.review, ...(prev.reviews || [])],
       }));
+      setEligibleBookings((prev) => prev.slice(1));
       setComment("");
       setRating(5);
       setReviewValidated(false);
@@ -100,6 +126,7 @@ export default function ListingDetailPage() {
         reviews: (prev.reviews || []).filter((r) => r._id !== reviewId),
       }));
       showSuccess("Review deleted!");
+      fetchReviewEligibility();
     } catch (err) {
       showError(getApiErrorMessage(err, "Failed to delete review."));
     }
@@ -287,41 +314,50 @@ export default function ListingDetailPage() {
             </div>
 
             {user ? (
-              <form
-                onSubmit={handleReviewSubmit}
-                noValidate
-                className={`card p-3 mb-4 border rounded-4 needs-validation ${
-                  reviewValidated ? "was-validated" : ""
-                }`}
-              >
-                <h6 className="mb-2">Leave a Review</h6>
-                <div className="mb-2">
-                  <StarRating value={rating} onChange={setRating} />
-                </div>
-                <div className="mb-3">
-                  <textarea
-                    id="comment"
-                    rows={3}
-                    placeholder="Share your experience..."
-                    className="form-control"
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    required
-                  />
-                  <div className="invalid-feedback">
-                    Please add a comment for your review.
+              eligibleBookings.length > 0 ? (
+                <form
+                  onSubmit={handleReviewSubmit}
+                  noValidate
+                  className={`card p-3 mb-4 border rounded-4 needs-validation ${
+                    reviewValidated ? "was-validated" : ""
+                  }`}
+                >
+                  <h6 className="mb-2">Leave a Verified Stay Review</h6>
+                  <div className="mb-2">
+                    <StarRating value={rating} onChange={setRating} />
                   </div>
-                </div>
-                <div>
-                  <button
-                    type="submit"
-                    className="btn btn-outline-dark btn-sm px-3"
-                    disabled={reviewSubmitting}
-                  >
-                    {reviewSubmitting ? "Submitting..." : "Submit Review"}
-                  </button>
-                </div>
-              </form>
+                  <div className="mb-3">
+                    <textarea
+                      id="comment"
+                      rows={3}
+                      placeholder="Share your experience..."
+                      className="form-control"
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      required
+                    />
+                    <div className="invalid-feedback">
+                      Please add a comment for your review.
+                    </div>
+                  </div>
+                  <div>
+                    <button
+                      type="submit"
+                      className="btn btn-outline-dark btn-sm px-3"
+                      disabled={reviewSubmitting}
+                    >
+                      {reviewSubmitting ? "Submitting..." : "Submit Review"}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                eligibilityLoaded && (
+                  <p className="text-muted small mb-4">
+                    Only guests with a completed reservation for this property
+                    can submit a review.
+                  </p>
+                )
+              )
             ) : (
               <p className="text-muted small mb-4">
                 <Link
@@ -331,7 +367,7 @@ export default function ListingDetailPage() {
                 >
                   Log in
                 </Link>{" "}
-                to leave a review after your stay.
+                after completing a stay to leave a review.
               </p>
             )}
 

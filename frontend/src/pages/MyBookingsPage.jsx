@@ -271,6 +271,21 @@ export default function MyBookingsPage() {
                             {isBusy ? "Processing..." : "Pay with Razorpay"}
                           </button>
                         )}
+                        {booking.status === "Completed" &&
+                          booking.paymentStatus === "Paid" &&
+                          listing &&
+                          (booking.hasReview ? (
+                            <span className="badge text-bg-light border py-2">
+                              Review Submitted
+                            </span>
+                          ) : (
+                            <Link
+                              to={`/listings/${listing._id}`}
+                              className="btn btn-sm btn-outline-primary"
+                            >
+                              Write a Review
+                            </Link>
+                          ))}
                         {canCancel && (
                           <button
                             type="button"

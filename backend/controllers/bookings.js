@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Booking = require("../models/booking");
 const Listing = require("../models/listing");
 const Payment = require("../models/payment");
+const Review = require("../models/review");
 const ExpressError = require("../utils/expressError");
 const {
   PENDING_HOLD_MINUTES,
@@ -218,10 +219,21 @@ module.exports.createBooking = async (req, res) => {
 };
 
 module.exports.getMyBookings = async (req, res) => {
-  const bookings = await Booking.find({ guest: req.user._id })
+  const docs = await Booking.find({ guest: req.user._id })
     .populate("listing", "title location country image images price")
     .populate("host", "username")
     .sort({ createdAt: -1 });
+
+  const bookingIds = docs.map((b) => b._id);
+  const reviewed = await Review.find({
+    booking: { $in: bookingIds },
+  }).select("booking");
+  const reviewedSet = new Set(reviewed.map((r) => String(r.booking)));
+
+  const bookings = docs.map((doc) => ({
+    ...doc.toObject(),
+    hasReview: reviewedSet.has(String(doc._id)),
+  }));
 
   res.json({ bookings });
 };
