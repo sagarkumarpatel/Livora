@@ -41,4 +41,4 @@ Airbnb-inspired full-stack rental booking marketplace separated into a **React +
    npm install
    npm run dev
    ```
-2. Open `http://localhost:5173` (Vite proxies `/api` requests to `http://localhost:8080`).
+2. Open `http://localhost:5173` (Vite proxies `/api` requests to `http://localhost:5000`).
